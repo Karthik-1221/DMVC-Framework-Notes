@@ -1,6 +1,6 @@
 # DMVC Framework Notes - Beginner to Advanced
 
-A structured learning resource for the **DMVCFramework**, covering fundamentals through advanced concepts for building REST APIs and web applications in Delphi. This repository also includes supporting Delphi language, architecture, and productivity topics from the provided self-learning document so learners can connect framework knowledge with practical development skills.[1][2][3]
+A structured learning resource for the **DMVCFramework**, designed to take a learner from the basics of building a web API in Delphi to advanced application design, database integration, authentication, middleware, testing, and deployment. DMVCFramework is an open-source Delphi framework for RESTful services, JSON-RPC APIs, and web applications built around MVC, attribute-based routing, middleware, Active Record support, and production-friendly backend patterns.[1][2][3]
 
 ## Table of Contents
 
@@ -22,455 +22,847 @@ A structured learning resource for the **DMVCFramework**, covering fundamentals 
 
 ## Introduction to DMVC
 
-DMVCFramework is an open-source Delphi framework for building RESTful services, JSON-RPC APIs, and web applications using the MVC pattern.[1][2] It is popular because it combines routing, controllers, middleware, authentication, ORM support, server-side views, and flexible deployment options in one framework.[1][2]
+DMVCFramework is used to build HTTP-based backend applications in Delphi, especially REST APIs, JSON-RPC services, and server-side web applications.[1][2] It follows the MVC pattern, where controllers manage requests, models represent data and business rules, and views render output when server-side templates are needed.[2][3]
 
 ### What it is
 
-- A Delphi framework for web APIs and web applications.[2]
-- Based on the MVC pattern, which separates application responsibilities into models, views, and controllers.[2]
-- Capable of handling REST endpoints, static content, JSON payloads, and real-time features such as Server-Sent Events and WebSocket support.[1][2]
+- A backend and web framework for Delphi applications.[2]
+- Built around MVC architecture and attribute-based routing.[3]
+- Supports JSON serialization, middleware, authentication, Active Record, and multiple deployment models.[1][2]
 
 ### Why it is used
 
-- Improves code organization and maintainability.[1][2]
-- Helps structure backend projects with reusable controllers and services.[2]
-- Supports production features such as JWT authentication, middleware, and ORM-based database access.[1][2]
+- Keeps backend code organized into predictable layers.[3]
+- Reduces manual HTTP plumbing by handling routing, binding, serialization, and response generation.[1][2]
+- Makes it easier to scale from small demo APIs to larger production services.[1][2]
 
 ```pascal
 [MVCPath('/api/hello')]
-TMyController = class(TMVCController)
+THelloController = class(TMVCController)
 public
-  [MVCPath('/world')]
+  [MVCPath]
   [MVCHTTPMethod([httpGET])]
-  function HelloWorld: string;
+  procedure SayHello;
 end;
 
-function TMyController.HelloWorld: string;
+procedure THelloController.SayHello;
 begin
-  Result := 'Hello, DMVC!';
+  Render(200, 'Hello from DMVCFramework');
 end;
 ```
 
+In this example, the controller responds to `GET /api/hello`. The `MVCPath` attribute defines the resource path, and `MVCHTTPMethod` restricts the action to a GET request.[3]
+
 ## Setting Up the Environment
 
-DMVCFramework supports several Delphi versions, including Delphi 10 Seattle through Delphi 13 Florence.[1][2] A standard setup includes installing Delphi, cloning the DMVCFramework repository, and building the package version that matches the IDE.[1][2]
+A typical DMVCFramework setup begins with installing a supported Delphi version, cloning the framework repository, and opening the matching package for the IDE version in use.[1][2] Once installed, a project usually creates a `TMVCEngine` instance, registers controllers, and starts listening for HTTP requests.[2]
 
-### Basic steps
+### Basic setup steps
 
-1. Install a supported Delphi version.[1][2]
-2. Clone the framework repository.[2]
-3. Open the correct package folder for your Delphi version.
-4. Build and install the needed packages.
-5. Create a project and register controllers through `TMVCEngine`.
+1. Install Delphi.
+2. Clone the DMVCFramework repository.[2]
+3. Build the appropriate packages for your Delphi version.
+4. Create a web project or use an existing DMVC sample.
+5. Register controllers and configure middleware in the engine.
 
 ```bash
 git clone https://github.com/danieleteti/delphimvcframework.git
 ```
 
+### Minimal engine setup
+
 ```pascal
-FMVC := TMVCEngine.Create(Self);
-FMVC.AddController(TMyController);
+uses
+  MVCFramework,
+  MVCFramework.Commons,
+  Web.ReqMulti,
+  Web.WebBroker,
+  MyApp.MainController;
+
+type
+  TMyWebModule = class(TWebModule)
+  private
+    FMVC: TMVCEngine;
+  public
+    procedure WebModuleCreate(Sender: TObject);
+    procedure WebModuleDestroy(Sender: TObject);
+  end;
+
+procedure TMyWebModule.WebModuleCreate(Sender: TObject);
+begin
+  FMVC := TMVCEngine.Create(Self,
+    procedure(Config: TMVCConfig)
+    begin
+      Config[TMVCConfigKey.DefaultContentType] := TMVCMediaType.APPLICATION_JSON;
+      Config[TMVCConfigKey.DefaultContentCharset] := 'utf-8';
+    end);
+
+  FMVC.AddController(TMainController);
+end;
+
+procedure TMyWebModule.WebModuleDestroy(Sender: TObject);
+begin
+  FMVC.Free;
+end;
 ```
+
+This setup creates the engine, defines basic configuration, and registers a controller. In real projects, this is also where middleware, authentication handlers, and environment-specific settings are often added.[1][2]
 
 ## Core Concepts
 
-DMVCFramework follows the MVC pattern, where models handle data, views handle presentation, and controllers handle requests.[2] This separation makes the application easier to test, extend, and maintain.[2]
+The core of DMVCFramework is the MVC pattern. Controllers receive and process requests, models hold data and business logic, and views are used when the server must render HTML rather than only return JSON.[2][3]
 
 ### Models
 
-Models represent data and business rules. In DMVCFramework, models may be plain Delphi classes or database entities based on MVCActiveRecord.[2]
+Models represent application data. In simple cases, they are plain Delphi classes; in database-backed applications, they often become Active Record entities mapped to tables.[2][4]
 
 ```pascal
 type
-  TPerson = class
+  TUser = class
   private
-    FName: string;
-    FAge: Integer;
+    FID: Integer;
+    FUsername: string;
+    FEmail: string;
   public
-    property Name: string read FName write FName;
-    property Age: Integer read FAge write FAge;
+    property ID: Integer read FID write FID;
+    property Username: string read FUsername write FUsername;
+    property Email: string read FEmail write FEmail;
   end;
 ```
 
+A plain model like this is useful for request bodies, service-layer objects, or simple JSON serialization. Not every model has to map directly to a database table.
+
 ### Views
 
-Views are useful for rendering HTML or template-based output. DMVCFramework supports server-side views with template systems such as Mustache and TemplatePro.[2]
+Views are useful when returning HTML pages from the server. Although many DMVC applications are API-first, server-side rendering is still supported.[2]
 
 ```pascal
-procedure TMyController.ShowHome;
+procedure TMainController.Home;
 begin
-  ViewData['title'] := 'Home';
+  ViewData['Title'] := 'DMVC Notes';
+  ViewData['Message'] := 'Welcome to the home page';
   Render('home');
 end;
 ```
 
+Here, the controller sets values in `ViewData` and renders a template named `home`. This is helpful for dashboards, admin pages, and hybrid applications.
+
 ### Controllers
 
-Controllers process HTTP requests and return data or rendered responses. They are central to defining API behavior in DMVCFramework.[2]
+Controllers are the entry points for HTTP requests. Each controller inherits from `TMVCController`, and actions are ordinary methods marked with routing attributes.[3]
 
 ```pascal
 [MVCPath('/api/users')]
-TUserController = class(TMVCController)
+TUsersController = class(TMVCController)
 public
   [MVCPath]
   [MVCHTTPMethod([httpGET])]
-  function GetUsers: TObjectList<TPerson>;
+  procedure GetUsers;
+
+  [MVCPath('/($id)')]
+  [MVCHTTPMethod([httpGET])]
+  procedure GetUserByID(id: Integer);
+end;
+
+procedure TUsersController.GetUsers;
+begin
+  Render<TArray<string>>(['Alice', 'Bob', 'Charlie']);
+end;
+
+procedure TUsersController.GetUserByID(id: Integer);
+begin
+  Render(Format('User id requested: %d', [id]));
 end;
 ```
+
+This design keeps routing close to the code that handles the request. It also makes controllers easier to read and maintain than manually parsing paths.
 
 ## Routing and Request Handling
 
-Routing in DMVCFramework is mainly attribute-based, so route definitions and allowed HTTP methods are attached directly to controller actions.[2] This keeps endpoint declarations compact and easy to read.[2]
+Routing is one of the most important parts of DMVCFramework. The framework uses attributes such as `MVCPath` and `MVCHTTPMethod` to map URLs and HTTP verbs to controller actions.[3]
 
 ### Key ideas
 
-- Use `MVCPath` for route paths.[2]
-- Use `MVCHTTPMethod` for HTTP verbs.[2]
-- Use route parameters to capture values from URLs.[1][2]
-- Use attributes consistently because they are a core Delphi topic and a core part of DMVC routing.[3][2]
+- `MVCPath` defines the URL path for a controller or action.[3]
+- `MVCHTTPMethod` restricts which HTTP methods can call that action.[3]
+- URL parameters such as `($id)` are automatically extracted and passed to action parameters.[3]
+- Strongly typed action parameters help keep code clean and explicit.[3]
+
+### Route example with parameters
 
 ```pascal
-[MVCPath('/api/products')]
-TProductController = class(TMVCController)
+[MVCPath('/api/orders')]
+TOrdersController = class(TMVCController)
 public
-  [MVCPath('/($id)')]
+  [MVCPath('/($orderid)/items/($itemid)')]
   [MVCHTTPMethod([httpGET])]
-  function GetProduct(const id: Integer): string;
+  procedure GetOrderItem(orderid: Integer; itemid: Integer);
 end;
 
-function TProductController.GetProduct(const id: Integer): string;
+procedure TOrdersController.GetOrderItem(orderid, itemid: Integer);
 begin
-  Result := 'Requested product id: ' + id.ToString;
+  Render(Format('Order %d, Item %d', [orderid, itemid]));
 end;
 ```
+
+A request to `/api/orders/25/items/3` will automatically pass `25` and `3` into the action method. This is cleaner than reading and converting route values manually.[3]
+
+### Reading request information
+
+```pascal
+procedure TOrdersController.Search;
+begin
+  var LKeyword := Context.Request.QueryStringParam('q');
+  var LPage := Context.Request.QueryStringParam('page');
+  Render(Format('Search=%s, Page=%s', [LKeyword, LPage]));
+end;
+```
+
+The `Context` object gives access to query string values, headers, body data, cookies, and response settings. It is one of the main objects used inside a controller action.[3]
 
 ## Data Binding and Validation
 
-DMVCFramework supports serialization and deserialization of JSON payloads, making it easier to bind request bodies to Delphi objects.[2] Validation should be applied before saving data or executing business logic so bad input can be rejected early.
+DMVCFramework can deserialize JSON request bodies into Delphi objects and serialize Delphi objects back into JSON responses.[1][2] This makes API actions much easier to write because the controller can work with typed data instead of raw text.
 
-### Common flow
-
-- Read request data into a Delphi object.[2]
-- Validate required values and formats.
-- Return meaningful HTTP error responses.
-- Prefer clean, local variable usage where inline variables improve readability.[3]
-
-```pascal
-procedure TUserController.CreateUser;
-var
-  LUser: TPerson;
-begin
-  LUser := Context.Request.BodyAs<TPerson>;
-  if LUser.Name.Trim.IsEmpty then
-    raise EMVCException.Create(400, 'Name is required');
-  Render(201, 'User created');
-end;
-```
-
-## Working with Databases
-
-DMVCFramework includes MVCActiveRecord, which provides ORM support for CRUD operations and works with multiple relational databases such as PostgreSQL, MySQL, MariaDB, Firebird, InterBase, SQLite, and SQL Server.[2] This matches the Object-Relational Mapping topic in your document and is one of the most important practical parts of DMVC backend development.[3][2]
-
-### Example entity
+### Binding JSON into an object
 
 ```pascal
 type
-  [MVCNameCase(ncLowerCase)]
+  TCreateUserRequest = class
+  private
+    FUsername: string;
+    FEmail: string;
+    FAge: Integer;
+  public
+    property Username: string read FUsername write FUsername;
+    property Email: string read FEmail write FEmail;
+    property Age: Integer read FAge write FAge;
+  end;
+
+procedure TUsersController.CreateUser;
+begin
+  var LRequest := Context.Request.BodyAs<TCreateUserRequest>;
+  try
+    if LRequest.Username.Trim.IsEmpty then
+      raise EMVCException.Create(400, 'Username is required');
+
+    if LRequest.Email.Trim.IsEmpty then
+      raise EMVCException.Create(400, 'Email is required');
+
+    if LRequest.Age < 18 then
+      raise EMVCException.Create(400, 'Age must be at least 18');
+
+    Render(201, 'User created successfully');
+  finally
+    LRequest.Free;
+  end;
+end;
+```
+
+This example reads the JSON body into a Delphi class and applies simple validation rules before continuing. The idea is to reject bad input early and keep service logic safe.
+
+### Returning structured JSON
+
+```pascal
+type
+  TUserResponse = class
+  private
+    FID: Integer;
+    FName: string;
+    FStatus: string;
+  public
+    property ID: Integer read FID write FID;
+    property Name: string read FName write FName;
+    property Status: string read FStatus write FStatus;
+  end;
+
+procedure TUsersController.GetProfile;
+begin
+  var LResponse := TUserResponse.Create;
+  try
+    LResponse.ID := 101;
+    LResponse.Name := 'Alice';
+    LResponse.Status := 'Active';
+    Render(LResponse);
+  finally
+    LResponse.Free;
+  end;
+end;
+```
+
+This is a cleaner approach than manually creating JSON strings because the framework handles serialization for you.
+
+## Working with Databases
+
+DMVCFramework includes MVCActiveRecord, which implements an Active Record pattern for database access.[2][4] In this model, a Delphi class maps to a database table, and the class can perform operations such as insert, update, delete, and lookup.[4]
+
+### Active Record entity example
+
+```pascal
+type
   [MVCTable('customers')]
   TCustomer = class(TMVCActiveRecord)
   private
     FID: Integer;
-    FName: string;
+    FFullName: string;
+    FEmail: string;
+    FCreatedAt: TDateTime;
   published
     [MVCColumn('id', [mcPrimaryKey, mcAutoGenerated])]
     property ID: Integer read FID write FID;
 
-    [MVCColumn('name')]
-    property Name: string read FName write FName;
+    [MVCColumn('full_name')]
+    property FullName: string read FFullName write FFullName;
+
+    [MVCColumn('email')]
+    property Email: string read FEmail write FEmail;
+
+    [MVCColumn('created_at')]
+    property CreatedAt: TDateTime read FCreatedAt write FCreatedAt;
   end;
 ```
 
-### Example usage
+This class maps the `customers` table to a Delphi class. The attributes describe how class properties match table columns and identify the primary key.[4]
+
+### Insert data
 
 ```pascal
-var
-  Customer: TCustomer;
+procedure TCustomersController.CreateCustomer;
 begin
-  Customer := TCustomer.Create;
-  Customer.Name := 'Alice';
-  Customer.Insert;
+  var LCustomer := Context.Request.BodyAs<TCustomer>;
+  try
+    LCustomer.CreatedAt := Now;
+    LCustomer.Insert;
+    Render(201, LCustomer);
+  finally
+    LCustomer.Free;
+  end;
 end;
 ```
 
+### Query by primary key
+
+```pascal
+procedure TCustomersController.GetCustomerByID(id: Integer);
+begin
+  var LCustomer := TMVCActiveRecord.GetByPK<TCustomer>(id);
+  try
+    if not Assigned(LCustomer) then
+      raise EMVCException.Create(404, 'Customer not found');
+
+    Render(LCustomer);
+  finally
+    LCustomer.Free;
+  end;
+end;
+```
+
+### Update existing data
+
+```pascal
+procedure TCustomersController.UpdateCustomer(id: Integer);
+begin
+  var LExisting := TMVCActiveRecord.GetByPK<TCustomer>(id);
+  if not Assigned(LExisting) then
+    raise EMVCException.Create(404, 'Customer not found');
+
+  try
+    var LInput := Context.Request.BodyAs<TCustomer>;
+    try
+      LExisting.FullName := LInput.FullName;
+      LExisting.Email := LInput.Email;
+      LExisting.Update;
+      Render(200, LExisting);
+    finally
+      LInput.Free;
+    end;
+  finally
+    LExisting.Free;
+  end;
+end;
+```
+
+This style is useful because database logic stays close to the entity class, reducing the need to write repetitive SQL for common CRUD operations.[4]
+
 ## Authentication and Authorization
 
-DMVCFramework provides support for JWT authentication, HTTP Basic Authentication, and custom authentication solutions.[2] These features help secure endpoints and control access to protected routes.[2]
+DMVCFramework supports authentication mechanisms such as HTTP Basic Authentication and JWT-based authentication.[2][5] JWT is especially useful for stateless APIs because the token contains claims that can be validated on each request without storing session data on the server.[5]
 
-### Typical flow
-
-- Accept credentials.
-- Validate the user.
-- Issue a JWT token.
-- Use the token to access protected resources.[2]
+### Simple login example
 
 ```pascal
 procedure TAuthController.Login;
 begin
-  if IsValidUser('admin', 'secret') then
+  var LUsername := Context.Request.BodyParam('username');
+  var LPassword := Context.Request.BodyParam('password');
+
+  if (LUsername = 'admin') and (LPassword = 'secret') then
     Render(200, '{"token":"sample-jwt-token"}')
   else
-    Render(401, 'Unauthorized');
+    Render(401, 'Invalid credentials');
 end;
 ```
+
+### Protecting an endpoint
+
+```pascal
+[MVCPath('/api/secure')]
+TSecureController = class(TMVCController)
+public
+  [MVCPath('/profile')]
+  [MVCHTTPMethod([httpGET])]
+  procedure GetProfile;
+end;
+
+procedure TSecureController.GetProfile;
+begin
+  Render(200, 'Authorized access to secure profile');
+end;
+```
+
+In a real application, this controller would be protected by authentication middleware or a custom authorization check. The important idea is that login issues a token, and later requests present that token for validation.[5][6]
+
+### Why JWT is useful
+
+- Works well in stateless architectures.[5]
+- Fits REST APIs and SPA/mobile clients.[5]
+- Can carry user identity and permission claims.[6][5]
 
 ## Error Handling and Logging
 
-DMVCFramework integrates with LoggerPro and includes production-friendly logging support.[2] A good approach is to return proper HTTP status codes, log exceptions, and avoid exposing internal errors to the client.
+A backend API should fail in predictable ways. Good error handling means validating input, returning appropriate status codes, logging exceptions, and keeping internal details out of public responses.[2]
 
-### Good practices
-
-- Use `400` for invalid input.
-- Use `401` or `403` for authorization failures.
-- Use `500` for unexpected server errors.
-- Log enough context to make debugging easier.[2]
+### Exception handling example
 
 ```pascal
-try
-  DoWork;
-  Render(200, 'Success');
-except
-  on E: Exception do
-  begin
-    LogE(E.Message);
-    Render(500, 'Internal Server Error');
+procedure TReportController.Generate;
+begin
+  try
+    if Context.Request.QueryStringParam('type').Trim.IsEmpty then
+      raise EMVCException.Create(400, 'Report type is required');
+
+    Render(200, 'Report generated');
+  except
+    on E: EMVCException do
+      Render(E.HTTPStatusCode, E.Message);
+    on E: Exception do
+    begin
+      LogE(E.ClassName + ': ' + E.Message);
+      Render(500, 'Internal server error');
+    end;
   end;
 end;
 ```
+
+This pattern distinguishes expected API errors from unexpected system failures. That separation improves both debugging and client-side behavior.
+
+### Logging ideas
+
+- Log route, method, and request identifiers.
+- Log exception class and message.
+- Avoid logging secrets such as passwords or raw tokens.
+- Add enough context to reproduce the issue later.
 
 ## Middleware and Services
 
-DMVCFramework includes middleware support for request and response processing, and recent versions add rate limiting middleware with in-memory and Redis-backed options.[1][2] Middleware is useful for authentication, CORS, logging, response shaping, compression, and traffic control.[1][2]
+Middleware processes requests and responses before or after controller actions. Services hold business logic that should not live directly inside controllers.[1][2]
 
-### Example middleware registration
-
-```pascal
-Engine.AddMiddleware(
-  TMVCRateLimitMiddleware.Create(
-    100,
-    60,
-    'Too many requests. Please slow down.'
-  )
-);
-```
-
-### Services
-
-Service classes keep controllers small by moving business logic into reusable units. This also supports easier testing and cleaner refactoring, which is one of the self-learning topics from the document.[3]
+### Middleware example
 
 ```pascal
 type
-  TUserService = class
+  TRequestTimeMiddleware = class(TMVCMiddleware)
   public
-    function GetDisplayName(const AName: string): string;
+    procedure OnBeforeRouting(Context: TWebContext; var Handled: Boolean); override;
+    procedure OnAfterControllerAction(Context: TWebContext; const AActionName: string; const Handled: Boolean); override;
   end;
 
-function TUserService.GetDisplayName(const AName: string): string;
+procedure TRequestTimeMiddleware.OnBeforeRouting(Context: TWebContext; var Handled: Boolean);
 begin
-  Result := 'User: ' + AName;
+  Context.Data['RequestStartedAt'] := Now;
+end;
+
+procedure TRequestTimeMiddleware.OnAfterControllerAction(Context: TWebContext; const AActionName: string; const Handled: Boolean);
+begin
+  var LStart := Context.Data['RequestStartedAt'];
+  Context.Response.CustomHeaders.Values['X-Request-Tracked'] := 'true';
 end;
 ```
 
+Middleware is ideal for cross-cutting tasks such as logging, authentication, CORS, rate limiting, response headers, and request metrics.[1]
+
+### Service example
+
+```pascal
+type
+  TInvoiceService = class
+  public
+    function CalculateTotal(const APrice: Currency; const AQuantity: Integer): Currency;
+    function BuildInvoiceMessage(const ACustomer: string; const ATotal: Currency): string;
+  end;
+
+function TInvoiceService.CalculateTotal(const APrice: Currency; const AQuantity: Integer): Currency;
+begin
+  Result := APrice * AQuantity;
+end;
+
+function TInvoiceService.BuildInvoiceMessage(const ACustomer: string; const ATotal: Currency): string;
+begin
+  Result := Format('Invoice for %s is %.2f', [ACustomer, ATotal]);
+end;
+```
+
+### Using a service inside a controller
+
+```pascal
+procedure TInvoiceController.GetTotal;
+begin
+  var LService := TInvoiceService.Create;
+  try
+    var LTotal := LService.CalculateTotal(199.50, 3);
+    Render(LService.BuildInvoiceMessage('Alice', LTotal));
+  finally
+    LService.Free;
+  end;
+end;
+```
+
+This design keeps HTTP-specific code in the controller and calculation logic in a reusable service class.
+
 ## Advanced Topics
 
-DMVCFramework supports advanced capabilities such as dependency injection, repository patterns, custom serializers, SSE, WebSocket support, and performance-oriented design options.[1][2] These topics are useful when moving from simple APIs to larger and more maintainable backend systems.[1][2]
+As applications grow, projects often need dependency injection, custom components, better performance, clearer abstractions, and more reusable infrastructure.[1][2] DMVCFramework supports this style of growth with flexible controller design, middleware, Active Record, and authentication patterns.[1][2]
 
 ### Dependency Injection
 
-Dependency injection reduces coupling by allowing controllers and services to depend on abstractions instead of concrete classes.[1][2] This topic also appears directly in your attached self-learning list.[3]
+Dependency injection helps remove tight coupling between a controller and the class it depends on. Instead of creating dependencies inside the controller, they are provided from outside.[1]
 
 ```pascal
 type
   IUserRepository = interface
-    function GetAllNames: TArray<string>;
+    ['{A1E73A26-4AE0-4E5F-8E29-B9B7DB66FE00}']
+    function FindUserNameByID(const AID: Integer): string;
   end;
 
-  [MVCPath('/api/accounts')]
-  TAccountController = class(TMVCController)
-  private
-    FRepo: IUserRepository;
+  TUserRepository = class(TInterfacedObject, IUserRepository)
   public
-    [MVCInject]
-    constructor Create(ARepo: IUserRepository); reintroduce;
+    function FindUserNameByID(const AID: Integer): string;
   end;
-```
 
-### Custom Components
-
-Custom components can be created for middleware, serialization helpers, reusable controller bases, or audit pipelines.
-
-```pascal
-type
-  TCustomAuditMiddleware = class(TMVCMiddleware)
-  public
-    procedure OnBeforeRouting(Context: TWebContext; var Handled: Boolean); override;
-  end;
-```
-
-### Performance Optimization
-
-- Use rate limiting and compression where suitable.[1][2]
-- Keep queries efficient and avoid unnecessary serialization.[2]
-- Prefer stateless API design when possible for scalability.[3]
-
-```pascal
-Context.Response.SetCustomHeader('Cache-Control', 'public, max-age=60');
-```
-
-## Additional Delphi Topics
-
-The provided document lists several Delphi topics that are useful alongside DMVCFramework, including Generics, Escape Characters, In-Line variables, Attributes, Dependency Injection, Refactoring, PPL, Anonymous Methods, Scope-Based Resource Management, Sqids Encoding, RAII, Stateless Architecture, Sacroscent, and Object-Relational Mapping.[3] These topics are included here as separate headings so the repository can also act as a broader Delphi study reference.[3]
-
-### Generics
-
-Generics let you build reusable classes and methods that work with multiple data types. In DMVC projects, they are useful for repositories, collections, wrappers, and generic response handling.[3]
-
-```pascal
-var
-  Users: TObjectList<TPerson>;
+function TUserRepository.FindUserNameByID(const AID: Integer): string;
 begin
-  Users := TObjectList<TPerson>.Create(True);
+  if AID = 1 then
+    Result := 'Alice'
+  else
+    Result := 'Unknown';
 end;
 ```
 
-### Escape Characters
+```pascal
+type
+  [MVCPath('/api/accounts')]
+  TAccountsController = class(TMVCController)
+  private
+    FRepo: IUserRepository;
+  public
+    constructor Create(const ARepo: IUserRepository); reintroduce;
 
-Escape characters are commonly used when writing JSON strings, log messages, or special text values manually. Even when serializers are preferred, it is still useful to understand escaping basics.[3]
+    [MVCPath('/($id)')]
+    [MVCHTTPMethod([httpGET])]
+    procedure GetAccountName(id: Integer);
+  end;
+
+constructor TAccountsController.Create(const ARepo: IUserRepository);
+begin
+  inherited Create;
+  FRepo := ARepo;
+end;
+
+procedure TAccountsController.GetAccountName(id: Integer);
+begin
+  Render(FRepo.FindUserNameByID(id));
+end;
+```
+
+This makes the controller easier to test because a fake repository can be provided during unit testing.
+
+### Custom Components
+
+A custom component in a DMVC application might be a reusable middleware, a base controller, a response helper, or a request pipeline extension.
 
 ```pascal
-var
-  JsonText: string;
+type
+  TApiResponseHelper = class
+  public
+    class procedure RenderSuccess(const AController: TMVCController; const AData: string);
+    class procedure RenderError(const AController: TMVCController; const AMessage: string; const AStatus: Integer);
+  end;
+
+class procedure TApiResponseHelper.RenderSuccess(const AController: TMVCController; const AData: string);
 begin
-  JsonText := '{"message":"Hello\nDMVC"}';
+  AController.Render(200, '{"success":true,"data":"' + AData + '"}');
+end;
+
+class procedure TApiResponseHelper.RenderError(const AController: TMVCController; const AMessage: string; const AStatus: Integer);
+begin
+  AController.Render(AStatus, '{"success":false,"error":"' + AMessage + '"}');
+end;
+```
+
+This kind of helper reduces repeated response formatting across controllers.
+
+### Performance Optimization
+
+Performance work in DMVC applications usually focuses on efficient routing, lighter payloads, optimized database queries, appropriate middleware usage, and stateless API design.[1][4] The goal is to reduce response time and resource usage without making the codebase hard to maintain.
+
+```pascal
+procedure TProductsController.ListProducts;
+begin
+  Context.Response.CustomHeaders.Values['Cache-Control'] := 'public, max-age=60';
+  Render<TArray<string>>(['Keyboard', 'Mouse', 'Monitor']);
+end;
+```
+
+Simple response caching headers like this can reduce repeated traffic for frequently requested read-only endpoints.
+
+## Additional Delphi Topics
+
+A strong DMVC developer also benefits from solid Delphi language fundamentals. Topics such as generics, attributes, anonymous methods, resource management, refactoring, and ORM concepts help make framework code cleaner and more professional.
+
+### Generics
+
+Generics allow classes, records, and methods to work with different data types without rewriting the same logic. They are especially useful for collections, repository abstractions, wrappers, and utility code.
+
+```pascal
+type
+  TApiResponse<T> = class
+  private
+    FSuccess: Boolean;
+    FData: T;
+  public
+    property Success: Boolean read FSuccess write FSuccess;
+    property Data: T read FData write FData;
+  end;
+
+procedure TSampleController.GenericResponse;
+begin
+  var LResponse := TApiResponse<string>.Create;
+  try
+    LResponse.Success := True;
+    LResponse.Data := 'Generic payload';
+    Render(LResponse);
+  finally
+    LResponse.Free;
+  end;
+end;
+```
+
+This approach becomes powerful when a project needs a consistent API response shape for many different data types.
+
+### Escape Characters
+
+Escape characters are important when strings contain quotes, backslashes, newlines, or tab characters. Even though most JSON should be produced by serializers, understanding escaping prevents subtle bugs.
+
+```pascal
+procedure TSampleController.ShowEscapedJson;
+begin
+  var LJson := '{"title":"DMVC Notes","message":"Line1\nLine2","path":"C:\\Temp\\app.log"}';
+  Render(200, LJson);
 end;
 ```
 
 ### In-Line Variables
 
-Your document specifically explains inline variable declarations and their limited scope inside code blocks.[3] They can make controller and service code shorter by declaring variables exactly where they are needed.[3]
+Inline variables allow variables to be declared closer to where they are used. This often improves readability by reducing the distance between declaration and usage.
 
 ```pascal
-procedure TSampleController.Test;
+procedure TMathController.Calculate;
 begin
-  var LCount := 10;
-  Render(LCount.ToString);
+  var A := 10;
+  var B := 20;
+  var Sum := A + B;
+  Render(Format('Sum = %d', [Sum]));
 end;
 ```
+
+This style is especially helpful in smaller code blocks, parsing steps, and temporary controller logic.
 
 ### Attributes
 
-Attributes are metadata annotations in Delphi, and they are heavily used in DMVCFramework for routes, HTTP methods, serialization settings, and injection patterns.[3][2]
+Attributes are metadata applied to classes, methods, and properties. DMVCFramework relies heavily on attributes for routing and configuration.[3]
 
 ```pascal
-[MVCPath('/api/orders')]
-[MVCDoc('Order endpoints')]
-TOrderController = class(TMVCController)
+[MVCPath('/api/reports')]
+TReportsController = class(TMVCController)
+public
+  [MVCPath('/daily')]
+  [MVCHTTPMethod([httpGET])]
+  procedure Daily;
+end;
+
+procedure TReportsController.Daily;
+begin
+  Render('Daily report');
 end;
 ```
+
+Without attributes like these, routing would require more manual registration and less expressive code.
 
 ### Adding Unit to the Uses Section
 
-Managing the `uses` section correctly helps keep dependencies clear and compilation clean. It is a small topic, but it matters when organizing multi-unit Delphi projects.[3]
+The `uses` section defines which units are available to the current unit. Keeping it clean helps compilation, readability, and dependency management.
 
 ```pascal
+unit MyApp.UsersController;
+
+interface
+
 uses
   System.SysUtils,
   System.Classes,
-  MVCFramework;
+  MVCFramework,
+  MVCFramework.Commons,
+  MyApp.UserService,
+  MyApp.Models;
 ```
+
+A good practice is to group system units, framework units, and project units in a logical order.
 
 ### Dependency Injection
 
-Dependency injection makes code more modular and testable by separating abstractions from implementations. It is useful in service registration, repository access, and controller design.[3][1][2]
+Dependency injection improves modularity and testability by pushing dependency creation out of the class that uses them. This is especially useful for repositories, services, loggers, and external clients.
 
 ```pascal
 type
-  IEmailService = interface
-    procedure Send(const ATo, ABody: string);
+  ILogger = interface
+    ['{BE09A18C-C3A7-4BB8-A7A7-B1B299BFF000}']
+    procedure Info(const AMsg: string);
   end;
+
+  TConsoleLogger = class(TInterfacedObject, ILogger)
+  public
+    procedure Info(const AMsg: string);
+  end;
+
+procedure TConsoleLogger.Info(const AMsg: string);
+begin
+  OutputDebugString(PChar(AMsg));
+end;
 ```
+
+Once interfaces like this exist, controllers and services can depend on `ILogger` rather than a specific logger implementation.
 
 ### Refactoring
 
-Refactoring improves code quality without changing behavior. In DMVC projects, this often means moving duplicated logic out of controllers and into services, helpers, or repositories.[3]
+Refactoring is the process of improving code structure without changing behavior. In DMVC projects, common refactoring steps include extracting services, moving validation into helpers, and replacing duplicated controller logic.
 
 ```pascal
-function NormalizeName(const AValue: string): string;
+function NormalizeEmail(const AEmail: string): string;
 begin
-  Result := AValue.Trim.ToLower;
+  Result := Trim(LowerCase(AEmail));
+end;
+
+procedure TUsersController.Save;
+begin
+  var LEmail := NormalizeEmail(Context.Request.BodyParam('email'));
+  Render('Saved ' + LEmail);
 end;
 ```
+
+Small improvements like this make code easier to reuse and easier to test.
 
 ### Parallel Programming Library (PPL)
 
-PPL is useful for background processing and concurrent tasks in Delphi. It should be applied carefully in server applications so shared-state issues are avoided.[3]
+PPL provides abstractions such as tasks for concurrent execution. In web applications, it is best used for non-request-critical work such as report generation, notifications, or post-processing.
 
 ```pascal
-TTask.Run(
-  procedure
-  begin
-    GenerateReport;
-  end
-);
-```
+uses
+  System.Threading;
 
-### Anonymous Methods
-
-Anonymous methods are useful for short callbacks, background tasks, and event-based logic. They are often used together with asynchronous or task-based code in Delphi.[3]
-
-```pascal
-var
-  Proc: TProc;
+procedure TReportsController.GenerateAsync;
 begin
-  Proc := procedure begin Log('Done'); end;
-  Proc();
+  TTask.Run(
+    procedure
+    begin
+      Sleep(3000);
+      TFile.WriteAllText('report.txt', 'Report completed');
+    end);
+
+  Render(202, 'Report generation started');
 end;
 ```
 
-### Scope-Based Resource Management
+This lets the API return immediately while longer work continues in the background.
 
-Scope-based resource management aims to make cleanup safer by limiting resource lifetime to a clear code scope. It helps reduce leaks and resource misuse.[3]
+### Anonymous Methods
+
+Anonymous methods are unnamed procedures or functions that can be passed around like values. They are often used in callbacks, asynchronous code, and small local behaviors.
 
 ```pascal
-procedure UseList;
+procedure ExecuteAction(const AProc: TProc);
 begin
-  var LList := TStringList.Create;
+  AProc();
+end;
+
+procedure TSampleController.RunCallback;
+begin
+  ExecuteAction(
+    procedure
+    begin
+      Log('Callback executed');
+    end);
+
+  Render('Callback finished');
+end;
+```
+
+They are useful, but too many nested anonymous methods can make code harder to read.
+
+### Scope-Based Resource Management
+
+This style keeps resources alive only within the block where they are needed. It helps avoid leaks and makes ownership easier to understand.
+
+```pascal
+procedure TFileController.ReadConfig;
+begin
+  var LLines := TStringList.Create;
   try
-    LList.Add('Scoped resource');
+    LLines.LoadFromFile('config.ini');
+    Render(LLines.Text);
   finally
-    LList.Free;
+    LLines.Free;
   end;
 end;
 ```
 
+The resource is created, used, and released in one place, which makes maintenance safer.
+
 ### Sqids Encoding
 
-Sqids encoding can be used to convert numeric IDs into friendlier public identifiers. This is useful when exposing IDs in URLs or APIs without showing raw sequential values.[3]
+Sqids-style encoding is useful when public URLs should not expose raw numeric database IDs. Even if the exact library differs, the concept is the same: translate internal IDs into safer external tokens.
 
 ```pascal
 function EncodePublicID(const AID: Integer): string;
 begin
-  Result := 'sqid_' + AID.ToString;
+  Result := 'USR' + IntToHex(AID, 6);
+end;
+
+procedure TUsersController.GetPublicID;
+begin
+  Render(EncodePublicID(25));
 end;
 ```
 
+This is useful in APIs where sequential integer IDs should not be obvious to clients.
+
 ### Resource Acquisition Is Initialization (RAII)
 
-RAII is a resource management pattern where object lifetime controls acquisition and cleanup. In Delphi, this idea is often discussed together with interface-based lifetime or scoped wrappers.[3]
+RAII is a design idea where acquiring a resource is tied to object lifetime, so cleanup happens predictably. Delphi often uses `try..finally`, interfaces, or wrapper objects to achieve a similar effect.
 
 ```pascal
-procedure ProcessData;
+procedure TStreamController.ReadText;
 begin
-  var LStream := TStringStream.Create('sample');
+  var LStream := TStringStream.Create('Hello DMVC');
   try
     Render(LStream.DataString);
   finally
@@ -479,58 +871,79 @@ begin
 end;
 ```
 
+The important principle is that resource ownership is explicit and cleanup is guaranteed.
+
 ### Stateless Architecture
 
-Stateless architecture means each request contains all the information needed for processing, without relying on server-side session memory. This aligns well with REST API design and scalable backend systems.[3]
+A stateless system does not keep per-user session state in server memory between requests. Each request must carry everything needed for processing, such as a JWT token or request parameters.[5]
 
 ```pascal
-procedure TTokenController.Profile;
+procedure TProfileController.Me;
 begin
-  Render(200, 'Read identity from JWT instead of session state');
+  var LAuthHeader := Context.Request.Headers['Authorization'];
+  if LAuthHeader.Trim.IsEmpty then
+    raise EMVCException.Create(401, 'Missing token');
+
+  Render('Profile resolved from token');
 end;
 ```
 
+This model improves scalability because any server instance can handle any request.
+
 ### Sacroscent
 
-This topic appears in the provided document as a listed heading, so it is preserved here as a placeholder study item.[3] It can be expanded later with a proper explanation once the intended meaning or context is clarified.[3]
+This topic can be kept as a placeholder heading until a precise technical meaning is decided for the repository. If it was intended as a special principle, naming convention, or design rule, it can later be expanded into a dedicated note.
 
-```pascal
-// Placeholder topic from source document
+```text
+Placeholder topic for future clarification
 ```
 
 ### Object-Relational Mapping
 
-Object-relational mapping connects database tables with Delphi classes. In DMVCFramework, MVCActiveRecord is the main ORM-based feature used for this pattern.[3][2]
+ORM maps database tables to objects so application code can work with entities instead of manual row-by-row handling. In DMVCFramework, MVCActiveRecord is the most visible ORM-oriented feature.[4]
 
 ```pascal
-Customers := TMVCActiveRecord.All<TCustomer>;
+procedure TCustomersController.ListAll;
+begin
+  var LCustomers := TMVCActiveRecord.All<TCustomer>;
+  try
+    Render<TObjectList<TCustomer>>(LCustomers);
+  except
+    LCustomers.Free;
+    raise;
+  end;
+end;
 ```
+
+This pattern makes CRUD-heavy applications easier to write, though developers should still understand SQL and query performance.
 
 ## Developer Productivity and IDE Tips
 
-Your document also includes practical IDE and workflow items such as `Ctrl + Shift + G`, auto formatting, and shortcuts like `Ctrl + D`, `Ctrl + A`, and `Ctrl + Shift + J`.[3] These small habits improve speed and consistency during daily Delphi development.[3]
+Good productivity habits improve both learning speed and code quality. Clean formatting, correct unit organization, and efficient shortcut usage save time in everyday Delphi development.
 
 ### Ctrl + Shift + G
 
-This topic is listed in the source document and can be documented here as an IDE navigation or productivity shortcut based on your preferred workflow reference.[3]
+This heading can be used to document a team-specific or IDE-specific shortcut workflow. Repository notes can later expand this with the exact action used in the preferred Delphi IDE setup.
 
 ```text
-Ctrl + Shift + G
+Document the exact IDE action here
 ```
 
 ### Auto Formatting
 
-Auto formatting keeps code consistent and easier to read, especially in larger projects or team environments.[3]
+Consistent formatting makes code easier to review and maintain. It becomes especially important as projects grow or multiple developers work on the same codebase.
 
 ```pascal
+procedure TSampleController.CleanCode;
 begin
-  Render('Formatted code is easier to maintain');
+  if True then
+    Render('Formatted code is easier to read');
 end;
 ```
 
 ### Shortcuts
 
-The source document lists `Ctrl + D`, `Ctrl + A`, and `Ctrl + Shift + J` as useful shortcuts.[3] Keeping these in the README helps beginners build better productivity habits while learning DMVC and Delphi together.[3]
+Useful editor shortcuts help with navigation, refactoring, and code editing speed. A repository like this can maintain a small list of high-value shortcuts for daily use.
 
 ```text
 Ctrl + D
@@ -540,48 +953,71 @@ Ctrl + Shift + J
 
 ## Testing in DMVC
 
-The project repository notes a large automated test base, with more than 250 tests highlighted in the README.[2] In practice, DMVC testing usually includes unit tests for services and repositories, plus integration tests for routes, controllers, and API responses.[2]
+The DMVCFramework project highlights a large automated test base, showing that testing is an important part of the ecosystem.[2] In application code, the most common layers to test are services, repositories, and controller behavior.[2]
 
-### What to test
-
-- Controller routes and status codes.
-- Service logic.
-- Validation behavior.
-- Repository methods.
-- Authentication flows.
+### Unit test for a service
 
 ```pascal
-procedure TUserServiceTest.ShouldReturnDisplayName;
-var
-  Service: TUserService;
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TInvoiceServiceTests = class
+  public
+    [Test]
+    procedure CalculateTotal_ShouldMultiplyPriceAndQuantity;
+  end;
+
+procedure TInvoiceServiceTests.CalculateTotal_ShouldMultiplyPriceAndQuantity;
 begin
-  Service := TUserService.Create;
-  Assert.AreEqual('User: Alice', Service.GetDisplayName('Alice'));
+  var LService := TInvoiceService.Create;
+  try
+    Assert.AreEqual<Currency>(598.50, LService.CalculateTotal(199.50, 3));
+  finally
+    LService.Free;
+  end;
 end;
 ```
 
+### Controller-level testing idea
+
+- Test route behavior.
+- Test status codes.
+- Test JSON output structure.
+- Test authentication failures.
+- Test validation rules for bad input.
+
+Testing becomes easier when controllers are thin and most business logic lives in services or repositories.
+
 ## Deployment and Best Practices
 
-DMVCFramework supports deployment as standalone applications, Windows services, Linux daemons, Apache modules, IIS ISAPI extensions, and desktop-hosted applications.[2] A good production setup should combine secure configuration, validation, structured logging, tested middleware, and clear environment-based settings.[1][2]
+DMVCFramework can be deployed in multiple ways, including standalone applications, Windows services, Linux daemons, Apache modules, and IIS ISAPI extensions.[2] A production-ready deployment should focus on security, environment-based configuration, structured logging, and stateless request handling.[1][2]
 
 ### Best practices
 
-- Keep controllers focused on HTTP concerns.
-- Move business logic into services or repositories.[1]
-- Use JWT and TLS-enabled deployment for security.[2]
-- Organize code so refactoring is easy as the application grows.[3]
-- Use formatting and shortcuts consistently to improve daily development flow.[3]
+- Keep controllers small and focused on HTTP concerns.
+- Move business logic into services and repositories.
+- Prefer structured serialization over manual JSON string building.
+- Use JWT or another secure authentication approach for protected routes.[5]
+- Validate inputs early and return clear status codes.
+- Use logging and middleware to support monitoring and debugging.
+- Design for stateless behavior when building scalable APIs.[5]
 
 ```pascal
-SetEnvironmentVariable('DMVC_ENV', 'production');
+procedure ConfigureEnvironment;
+begin
+  SetEnvironmentVariable('DMVC_ENV', 'production');
+  SetEnvironmentVariable('DMVC_LOG_LEVEL', 'warning');
+end;
 ```
 
 ## Next Steps
 
-This repository is meant to be a practical study guide, so contributions, improvements, and topic expansions are encouraged. Adding examples, clarifying placeholders, and discussing best practices can make it more useful for both beginners and experienced Delphi developers.[3]
+This repository can grow into a complete Delphi backend handbook by adding more real-world examples, request and response samples, architectural patterns, and step-by-step mini projects. Contributions, discussions, and topic expansions are encouraged as the notes evolve.
 
-- Add more examples for each DMVC section and each Delphi topic from the document.[3]
-- Expand placeholders such as Sacroscent and IDE shortcut meanings with your own notes.[3]
-- Open discussions for architecture decisions, debugging patterns, and deployment setups.
+- Add sample projects for CRUD APIs, JWT authentication, and MVCActiveRecord-based applications.
+- Expand testing examples with mock repositories and integration tests.
+- Add deployment examples for Windows service and Linux daemon hosting.[2]
 - Read the official documentation: [DMVCFramework Official Documentation](https://www.danieleteti.it/delphimvcframework_3_4_3_aluminium/).[1]
-- Explore the source code: [DMVCFramework GitHub Repository](https://github.com/danieleteti/delphimvcframework).[2]
+- Explore the framework source and examples: [DMVCFramework GitHub Repository](https://github.com/danieleteti/delphimvcframework).[2]
